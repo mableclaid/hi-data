@@ -36,6 +36,12 @@ async function paged(path, params) {
   return out;
 }
 
+// The text after "Year:" at the start of a line in the description, e.g. "1776", "c. 1650", "300 BCE"
+function yearFrom(description) {
+  const m = /^[ \t]*Year:[ \t]*(.*?)[ \t]*$/im.exec(description || '');
+  return m && m[1] ? m[1] : undefined;
+}
+
 // "PT1H2M3S" -> seconds
 function seconds(iso) {
   const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || '');
@@ -63,15 +69,17 @@ const videos = uploads.map((it) => ({
 if (!videos.length) throw new Error('YouTube returned no videos; keeping the old list.');
 const byId = new Map(videos.map((v) => [v.id, v]));
 
-// 2. Lengths and views, 50 at a time
+// 2. Lengths, views and the Year line, 50 at a time
 for (let i = 0; i < videos.length; i += 50) {
   const ids = videos.slice(i, i + 50).map((v) => v.id).join(',');
-  const d = await yt('videos', { part: 'contentDetails,statistics', id: ids, maxResults: '50' });
+  const d = await yt('videos', { part: 'snippet,contentDetails,statistics', id: ids, maxResults: '50' });
   for (const it of d.items || []) {
     const v = byId.get(it.id);
     if (!v) continue;
     v.seconds = seconds(it.contentDetails?.duration);
     v.views = Number(it.statistics?.viewCount || 0);
+    const year = yearFrom(it.snippet?.description);
+    if (year) v.year = year;
   }
 }
 
