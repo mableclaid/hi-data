@@ -19,11 +19,13 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
         with:
-          node-version: 20
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
       - name: Fetch the video list from YouTube
         env:
@@ -47,5 +49,6 @@ jobs:
             echo "No changes."
           else
             git commit -m "Update site data"
+            git pull --rebase
             git push
           fi
