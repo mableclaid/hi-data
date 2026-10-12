@@ -32,4 +32,44 @@ async function list(folderId) {
     if (pageToken) params.pageToken = pageToken;
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Drive failed (${res.status}):
+    if (!res.ok) throw new Error(`Drive failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const d = await res.json();
+    out.push(...(d.files || []));
+    pageToken = d.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+const folders = []; // top-level folder names, in Drive's name order
+const files = [];
+let bytes = 0;
+
+async function walk(folderId, path) {
+  for (const it of await list(folderId)) {
+    if (it.mimeType === FOLDER) {
+      if (path.length === 0) folders.push(it.name);
+      if (path.length < MAX_DEPTH) await walk(it.id, [...path, it.name]);
+      continue;
+    }
+    const size = Number(it.size || 0);
+    bytes += size;
+    files.push({
+      id: it.id,
+      name: it.name,
+      type: it.mimeType,
+      modified: it.modifiedTime,
+      description: it.description || '',
+      size,
+      path, // folder names from the main folder down; [] means loose in the main folder
+    });
+  }
+}
+
+await walk(ROOT, []);
+if (!files.length) throw new Error('Drive returned no files; keeping the old list.');
+
+writeFileSync(
+  'downloads.json',
+  JSON.stringify({ updated: new Date().toISOString(), count: files.length, folders, files }) + '\n'
+);
+console.log(`Saved ${files.length} files in ${folders.length} folders. Total size: ${(bytes / 1048576).toFixed(1)} MB.`);
